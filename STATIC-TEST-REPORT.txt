@@ -1,0 +1,9 @@
+Static checks for OTP Bridge source package
+
+- Extension receiver route uses GET /receive.
+- Android app sender route uses POST /send.
+- Worker source uses KV binding OTP_BRIDGE_KV and Secret BRIDGE_TOKEN.
+- Worker OTP retention is 120 seconds.
+- Extension OTP fill remains user initiated; no auto-submit code added.
+- APK is source-only and has not been compiled in this environment.
+- Live IVAC OTP flow has not been tested.
