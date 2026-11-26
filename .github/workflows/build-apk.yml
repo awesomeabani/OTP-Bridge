@@ -1,5 +1,4 @@
 
-
 name: Build OTP Bridge APK
 
 on:
@@ -27,22 +26,31 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
-          accept-android-sdk-licenses: true
 
-      - name: Check Android project
+      - name: Locate SDK Manager
+        shell: bash
         run: |
-          test -f app/build.gradle.kts
-          test -d app/src
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "SDK Manager not found"
+            exit 1
+          fi
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: yes | "$SDKMANAGER" --licenses || true
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
@@ -50,7 +58,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: OTP-Bridge-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-
+          name: OTP-Bridge-APK
+          path: app/build/outputs/apk/debug/*.apk
