@@ -1,44 +1,42 @@
-# OTP Bridge — Android source + Chrome Extension v21.2.1
+# OTP Bridge v2: ফোনের OTP → IVAC Extension (স্বয়ংক্রিয়)
 
-## বর্তমান Cloudflare সেটআপের সঙ্গে মিল
-আপনার Cloudflare Worker-এর Health Check সফল হলে Worker URL সচল। এই সংস্করণটি নিচের সেটআপের সঙ্গে মেলে:
-- KV binding variable: `OTP_BRIDGE_KV`
-- Worker Secret variable: `BRIDGE_TOKEN`
-- Android sends OTP to `POST /send`
-- Chrome Extension receives OTP from `GET /receive`
-- Health check: `GET /health`
-- OTP TTL: 120 seconds; receive হলে KV entry delete করা হয়।
+```
+ফোনে SMS ──► Android app ──► Cloudflare Worker (relay) ──► Extension ──► Verify OTP বক্সে বসে
+                                (১২০ সেকেন্ড/একবার)                         (Verify আপনি চাপবেন)
+```
 
-এই Project-এর `worker/worker.js` হলো একই interface-এর source copy। Cloudflare-এ ইতিমধ্যে Worker deploy করা থাকলে আবার deploy করার প্রয়োজন নেই।
+তিনটি অংশ: `relay-worker/`, `android/`, `extension/` (IVAC v21.3.0)।
+
+## ধাপ ১: Relay (একবার, কম্পিউটারে)
+1. Node.js ইনস্টল থাকতে হবে। বিনামূল্যের Cloudflare account লাগবে।
+2. `cd relay-worker`
+3. `npx wrangler login`
+4. `npx wrangler deploy`  → শেষে একটি URL দেখাবে, যেমন `https://otp-bridge-relay.NAME.workers.dev`
+5. পরের ধাপে Extension থেকে token তৈরি করে এখানে বসাবেন: `npx wrangler secret put BRIDGE_TOKEN`
+
+## ধাপ ২: Extension
+1. `chrome://extensions` → পুরোনোটি Remove → Developer mode → Load unpacked → `extension/` ফোল্ডার।
+2. Extension popup-এর নিচে **OTP Bridge** বক্সে:
+   - **Generate token** চাপুন, token কপি করে ধাপ ১.৫-এ Worker-এ বসান।
+   - Relay URL বসিয়ে **Save** চাপুন, তারপর **Test connection** (✔ আসতে হবে)।
+   - নিচের **Pairing code** কপি করুন।
+
+## ধাপ ৩: Android app
+1. `android/` ফোল্ডার GitHub-এ আপলোড করে Actions → *Build OTP Bridge APK* চালান (বা Android Studio-তে খুলে Build)। `app-debug.apk` ফোনে ইনস্টল করুন।
+2. App খুলে **Pairing code Paste করুন** (code আগে ফোনে কপি/পাঠিয়ে নিন), তারপর **Test connection**।
+3. **SMS অনুমতি দিন**।
+   Android 13+ এ sideload করা app-এ অনুমতি ধূসর থাকলে: Settings → Apps → OTP Bridge → ⋮ → *Allow restricted settings*।
+4. **SMS filter** ঘরে IVAC-এর SMS-এর প্রেরকের নাম বা SMS-এ থাকা একটি শব্দ দিন (ডিফল্ট `IVAC`)।
+   না মিললে app-এর "সর্বশেষ অবস্থা"-য় প্রেরকের নাম দেখাবে, সেটা filter-এ দিন।
 
 ## ব্যবহার
-1. Android app-এ HTTPS Cloudflare Worker URL এবং একই pairing token দিন।
-2. **Listen for OTP SMS** চাপুন। SMS এলে Google SMS User Consent prompt দেখাবে।
-3. Google consent দিলে app SMS থেকে ৬ সংখ্যার কোড অথবা one-two-three-four-five-six-এর মতো ছয়টি ইংরেজি সংখ্যা-শব্দ শনাক্ত করে অঙ্কে রূপান্তর করবে। একাধিক সম্ভাব্য কোড থাকলে কিছু পাঠাবে না।
-4. **Forward OTP to my Extension** চাপলে OTP relay-তে যাবে।
-5. Windows Chrome-এ IVAC Extension popup খুলে রাখুন; একই Relay URL ও token Save করুন। Popup খোলা থাকলে এটি `/receive` poll করে।
-6. OTP ছয়টি Extension box-এ এলে **Fill OTP** চাপুন। Verify/Submit আপনাকে নিজে চাপতে হবে।
+Verify OTP পেজ খোলা রাখুন। SMS এলে ১–৩ সেকেন্ডে OTP বক্সে বসবে ও নিচে সবুজ বার্তা আসবে। **Verify OTP আপনি নিজে চাপবেন।**
 
-## Chrome Extension install/update
-1. ZIP extract করুন।
-2. Chrome-এ `chrome://extensions` খুলুন এবং Developer mode চালু করুন।
-3. আগে একই IVAC extension-এর পুরোনো folder Load unpacked থাকলে সেটি Remove করুন (শুধু extension entry; profile data browser storage-এ থাকতে পারে), তারপর **Load unpacked** চাপুন।
-4. Extract করা `IVAC-Extension` folder নির্বাচন করুন।
-5. IVAC page refresh করুন।
+## নিরাপত্তা
+- Token, URL ও Pairing code গোপন রাখুন। যে জানে সে আপনার relay-তে OTP পাঠাতে/নিতে পারবে। সন্দেহ হলে নতুন token তৈরি করে Worker, Extension ও app-এ বদলান।
+- App শুধু filter-এ মেলা এবং ঠিক একটি ৬ সংখ্যার OTP থাকা SMS পাঠায়; SMS-এর লেখা কোথাও জমা হয় না।
+- Relay-তে OTP ১২০ সেকেন্ড বা একবার নেওয়ার পর মুছে যায়।
 
-## Android app build
-এই ZIP-এ Android Studio project source আছে, APK নয়। Android Studio-তে `OTP-Bridge` folder খুলে Gradle sync করুন; Android SDK 35 প্রয়োজন। তারপর Build > Build APK(s)। Android SDK/Gradle ছাড়া এখানে APK compile করা হয়নি।
-
-## Android Studio ছাড়া APK build (GitHub Actions)
-1. GitHub-এ একটি private repository তৈরি করুন।
-2. ZIP extract করে `OTP-Bridge` folder-এর ভেতরের সব ফাইল repository-তে upload/push করুন।
-3. **Actions** tab খুলে **Build OTP Bridge APK** workflow-এ **Run workflow** চাপুন।
-4. সফল হলে workflow artifact `OTP-Bridge-debug-apk` থেকে `app-debug.apk` নিন।
-
-## Security and limitations
-- App broad `READ_SMS` permission চায় না; Google SMS User Consent prompt ব্যবহার করে।
-- OTP স্বয়ংক্রিয়ভাবে পাঠানো হয় না; Google SMS consent দেওয়ার পর ব্যবহারকারীকে কোড দেখে Android-এর **Forward OTP** চাপতে হয়।
-- Token কমপক্ষে ৩২ অক্ষরের random string হওয়া উচিত এবং কখনো শেয়ার করা উচিত নয়।
-- Chrome popup বন্ধ থাকলে receiver polling বন্ধ থাকে। OTP আসার সময় popup খোলা রাখুন।
-- Cloudflare KV-এর get/delete atomic নয়; একই token-এ একাধিক receiver একসঙ্গে poll করবেন না।
-- CAPTCHA, IVAC authentication বা Verify/Submit control bypass করা হয় না।
+## সীমাবদ্ধতা
+- Android অংশ এই পরিবেশে compile করা যায়নি (Android SDK নেই)। Worker লজিক পরীক্ষিত, extension JS সিনট্যাক্স-পরীক্ষিত। প্রথমবার build-এ ত্রুটি এলে আমাকে দেখান।
+- Live IVAC পেজে পরীক্ষা হয়নি।
